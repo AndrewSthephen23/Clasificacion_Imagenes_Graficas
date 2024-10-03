@@ -1,6 +1,6 @@
 import tempfile
 import os
-from flask import Flask, request, redirect, send_file
+from flask import Flask, request, redirect, send_file, url_for
 from skimage import io
 import base64
 import glob
@@ -8,7 +8,8 @@ import numpy as np
 
 app = Flask(__name__)
 
-main_html = """
+def render_main_html(selected_categoria=None, selected_autor=None):
+    return f"""
 <html>
 <head></head>
 <script>
@@ -16,43 +17,30 @@ main_html = """
   var lastX, lastY;
   var ctx;
 
-   function getRndInteger(min, max) {
-    return Math.floor(Math.random() * (max - min) ) + min;
-   }
-
-  function InitThis() {
+  function InitThis() {{
       ctx = document.getElementById('myCanvas').getContext("2d");
 
-
-      numero = getRndInteger(0, 10);
-      figuras = ["circulo", "cuadrado", "estrella", "triangulo"];
-      random = Math.floor(Math.random() * figuras.length);
-      figuraAleatoria = figuras[random];
-
-      document.getElementById('mensaje').innerHTML  = 'Dibujando un ' + figuraAleatoria;
-      document.getElementById('numero').value = figuraAleatoria;
-
-      $('#myCanvas').mousedown(function (e) {
+      $('#myCanvas').mousedown(function (e) {{
           mousePressed = true;
           Draw(e.pageX - $(this).offset().left, e.pageY - $(this).offset().top, false);
-      });
+      }});
 
-      $('#myCanvas').mousemove(function (e) {
-          if (mousePressed) {
+      $('#myCanvas').mousemove(function (e) {{
+          if (mousePressed) {{
               Draw(e.pageX - $(this).offset().left, e.pageY - $(this).offset().top, true);
-          }
-      });
+          }}
+      }});
 
-      $('#myCanvas').mouseup(function (e) {
+      $('#myCanvas').mouseup(function (e) {{
           mousePressed = false;
-      });
-  	    $('#myCanvas').mouseleave(function (e) {
+      }});
+  	    $('#myCanvas').mouseleave(function (e) {{
           mousePressed = false;
-      });
-  }
+      }});
+  }}
 
-  function Draw(x, y, isDown) {
-      if (isDown) {
+  function Draw(x, y, isDown) {{
+      if (isDown) {{
           ctx.beginPath();
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 11;
@@ -61,98 +49,142 @@ main_html = """
           ctx.lineTo(x, y);
           ctx.closePath();
           ctx.stroke();
-      }
+      }}
       lastX = x; lastY = y;
-  }
+  }}
 
-  function clearArea() {
-      // Use the identity matrix while clearing the canvas
+  function clearArea() {{
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
+  }}
 
-  //https://www.askingbox.com/tutorial/send-html5-canvas-as-image-to-server
-  function prepareImg() {
+  // Enviar imagen y datos al servidor
+  function prepareImg() {{
      var canvas = document.getElementById('myCanvas');
      document.getElementById('myImage').value = canvas.toDataURL();
-  }
-
-
+  }}
 
 </script>
 <body onload="InitThis();">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
-    <script type="text/javascript" ></script>
-    <div align="left">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/f/f7/Uni-logo_transparente_granate.png" width="300"/>
-    </div>
     <div align="center">
-        <h1 id="mensaje">Dibujando...</h1>
+        <h1>Dibuja y selecciona la categoría y el autor</h1>
         <canvas id="myCanvas" width="200" height="200" style="border:2px solid black"></canvas>
         <br/>
         <br/>
         <button onclick="javascript:clearArea();return false;">Borrar</button>
     </div>
+    
     <div align="center">
-      <form method="post" action="upload" onsubmit="javascript:prepareImg();"  enctype="multipart/form-data">
-      <input id="numero" name="numero" type="hidden" value="">
-      <input id="myImage" name="myImage" type="hidden" value="">
-      <input id="bt_upload" type="submit" value="Enviar">
+      <form method="post" action="upload" onsubmit="javascript:prepareImg();" enctype="multipart/form-data">
+          <select id="categoria" name="categoria">
+              <option value="gato" {"selected" if selected_categoria == "gato" else ""}>Gato</option>
+              <option value="arbol" {"selected" if selected_categoria == "arbol" else ""}>Árbol</option>
+              <option value="pajaro" {"selected" if selected_categoria == "pajaro" else ""}>Pájaro</option>
+              <option value="bote" {"selected" if selected_categoria == "bote" else ""}>Bote</option>
+          </select>
+          
+          <select id="autor" name="autor">
+              <option value="Guillermo" {"selected" if selected_autor == "Guillermo" else ""}>Guillermo</option>
+              <option value="Bustos" {"selected" if selected_autor == "Bustos" else ""}>Bustos</option>
+              <option value="Andrei" {"selected" if selected_autor == "Andrei" else ""}>Andrei</option>
+              <option value="Cristina" {"selected" if selected_autor == "Cristina" else ""}>Cristina</option>
+          </select>
+          
+          <input id="myImage" name="myImage" type="hidden" value="">
+          <input id="bt_upload" type="submit" value="Enviar">
       </form>
     </div>
 </body>
 </html>
-
 """
 
 @app.route("/")
 def main():
-    return(main_html)
+    # Capturar las selecciones de la URL, si están disponibles
+    selected_categoria = request.args.get('categoria')
+    selected_autor = request.args.get('autor')
+    return render_main_html(selected_categoria, selected_autor)
 
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        # Código para manejar la subida de la imagen
-        img_data = request.form.get('myImage').replace("data:image/png;base64,","")
-        aleatorio = request.form.get('numero')
-        print(aleatorio)
-        with tempfile.NamedTemporaryFile(delete = False, mode = "w+b", suffix='.png', dir=str(aleatorio)) as fh:
+        # Procesar imagen
+        img_data = request.form.get('myImage').replace("data:image/png;base64,", "")
+        categoria = request.form.get('categoria')
+        autor = request.form.get('autor')
+        
+        # Crear carpetas si no existen
+        if not os.path.exists(categoria):
+            os.mkdir(categoria)
+        if not os.path.exists(f"{categoria}/{autor}"):
+            os.mkdir(f"{categoria}/{autor}")
+        
+        # Guardar imagen en la carpeta correspondiente a la categoría y autor
+        with tempfile.NamedTemporaryFile(delete=False, mode="w+b", suffix='.png', dir=f"{categoria}/{autor}") as fh:
             fh.write(base64.b64decode(img_data))
-        print("Image uploaded")
-    except Exception as err:
-        print("Error occurred")
-        print(err)
-    return redirect("/", code=302)  # Redirige a la página principal después de subir
+        
+        print(f"Imagen de {categoria} hecha por autor {autor} subida con exito.")
+    except Exception as e:
+        print("Error al subir la imagen:", e)
 
+    # Redirigir a la página principal con las selecciones mantenidas
+    return redirect(url_for('main', categoria=categoria, autor=autor))
 
 @app.route('/prepare', methods=['GET'])
 def prepare_dataset():
     images = []
-    d = ["circulo", "cuadrado", "estrella", "triangulo"]
-    digits = []
-    for figura in d:
-      filelist = glob.glob('{}/*.png'.format(figura))
-      images_read = io.concatenate_images(io.imread_collection(filelist))
-      images_read = images_read[:, :, :, 3]
-      digits_read = np.array([figura] * images_read.shape[0])
-      images.append(images_read)
-      digits.append(digits_read)
-    images = np.vstack(images)
-    digits = np.concatenate(digits)
+    categorias = ["gato", "arbol", "pajaro", "bote"]
+    autores = ["Guillermo", "Bustos", "Andrei", "Cristina"]
+    
+    categoria_labels = []
+    autor_labels = []
+    
+    # Cargar imágenes de cada categoría y autor
+    for categoria in categorias:
+        for autor in autores:
+            path = f"{categoria}/{autor}/*.png"
+            filelist = glob.glob(path)
+            
+            if filelist:
+                images_read = io.concatenate_images(io.imread_collection(filelist))
+                images_read = images_read[:, :, :, 3]  # Extraer la cuarta capa (alfa) si la imagen tiene transparencia
+                
+                # Etiquetas
+                categoria_labels += [categorias.index(categoria)] * len(images_read)
+                autor_labels += [autores.index(autor)] * len(images_read)
+                
+                images.append(images_read)
+    
+    images = np.vstack(images)  # Combinar todas las imágenes en un solo array
+    categoria_labels = np.array(categoria_labels)
+    autor_labels = np.array(autor_labels)
+    
+    # Guardar el dataset y las etiquetas
     np.save('X.npy', images)
-    np.save('y.npy', digits)
-    return "OK!"
+    np.save('y_categoria.npy', categoria_labels)
+    np.save('y_autor.npy', autor_labels)
+    
+    return "Dataset preparado y guardado como X.npy, y_categoria.npy, y_autor.npy."
 
 @app.route('/X.npy', methods=['GET'])
 def download_X():
     return send_file('./X.npy')
-@app.route('/y.npy', methods=['GET'])
-def download_y():
-    return send_file('./y.npy')
+
+@app.route('/y_categoria.npy', methods=['GET'])
+def download_y_categoria():
+    return send_file('./y_categoria.npy')
+
+@app.route('/y_autor.npy', methods=['GET'])
+def download_y_autor():
+    return send_file('./y_autor.npy')
 
 if __name__ == "__main__":
-    figures = ['circulo', 'cuadrado', 'estrella', 'triangulo']
-    for fig in figures:
-        if not os.path.exists(str(fig)):
-            os.mkdir(str(fig))
+    categorias = ['gato', 'arbol', 'pajaro', 'bote']
+    autores = ["Guillermo", "Bustos", "Andrei", "Cristina"]
+    
+    for categoria in categorias:
+        for autor in autores:
+            if not os.path.exists(f"{categoria}/{autor}"):
+                os.makedirs(f"{categoria}/{autor}")
     app.run()
