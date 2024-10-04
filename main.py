@@ -179,6 +179,40 @@ def download_y_categoria():
 def download_y_autor():
     return send_file('./y_autor.npy')
 
+@app.route('/listar_archivos', methods=['GET'])
+def listar_archivos():
+    categorias = ["gato", "arbol", "pajaro", "bote"]
+    autores = ["Guillermo", "Bustos", "Andrei", "Cristina"]
+    
+    archivos_por_autor = {autor: {categoria: [] for categoria in categorias} for autor in autores}
+    
+    for categoria in categorias:
+        for autor in autores:
+            path = f"{categoria}/{autor}/*.png"
+            filelist = glob.glob(path)
+            archivos_por_autor[autor][categoria].extend(filelist)
+
+    # Contar el total de archivos
+    total_archivos = sum(len(archivos_por_autor[autor][categoria]) for autor in autores for categoria in categorias)
+    
+    response = f"<h1>Listado de Archivos</h1>"
+    response += f"<p>Total de archivos: {total_archivos}</p>"
+    
+    for autor in autores:
+        response += f"<h2>Autor: {autor}</h2>"
+        for categoria in categorias:
+            archivos = archivos_por_autor[autor][categoria]
+            response += f"<h3>Categoría: {categoria}</h3>"
+            response += "<ul>"
+            for archivo in archivos:
+                response += f"<li>{os.path.basename(archivo)}</li>"
+            response += "</ul>"
+    
+    response += '<a href="/">Volver a la página principal</a>'
+    return response
+
+
+
 if __name__ == "__main__":
     categorias = ['gato', 'arbol', 'pajaro', 'bote']
     autores = ["Guillermo", "Bustos", "Andrei", "Cristina"]
